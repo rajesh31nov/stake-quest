@@ -1,0 +1,36 @@
+name: Pull Request Verification
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [ main, master, develop ]
+
+jobs:
+  pr-contract-validation:
+    name: Validate Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+      - name: Run Cargo Test
+        run: cargo test --all
+
+  pr-frontend-validation:
+    name: Validate Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install & Test
+        run: |
+          npm ci
+          npm test
+          npm run build

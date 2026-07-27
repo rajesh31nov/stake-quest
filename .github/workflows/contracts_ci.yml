@@ -1,0 +1,61 @@
+name: Soroban Smart Contracts CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+    paths:
+      - 'contracts/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'Makefile'
+  pull_request:
+    branches: [ main, master, develop ]
+    paths:
+      - 'contracts/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'Makefile'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  contract-tests:
+    name: Build & Test Soroban Contracts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+
+      - name: Cache Cargo Dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check Rust Formatting
+        run: cargo fmt --all -- --check
+
+      - name: Cargo Clippy Lints
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run Contract Unit & Integration Tests
+        run: cargo test --all --verbose
+
+      - name: Build Soroban WASM Binaries
+        run: cargo build --all --target wasm32-unknown-unknown --release

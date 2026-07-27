@@ -1,0 +1,37 @@
+name: Security & Secret Audit CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  secret-scan:
+    name: Secret & Key Leak Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan for Hardcoded Stellar Private Keys
+        run: |
+          if grep -E -r "S[A-Z0-9]{55}" --exclude-dir={.git,node_modules,target} .; then
+            echo "ERROR: Potential secret Stellar private key detected in repository!"
+            exit 1
+          else
+            echo "No secret keys found."
+          fi
+
+  npm-audit:
+    name: Frontend Dependency Security Audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Audit NPM Packages
+        run: npm audit --audit-level=high || true

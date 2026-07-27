@@ -43,7 +43,7 @@ fn setup_env<'a>() -> TestSetup<'a> {
     let challenge_client = ChallengeContractClient::new(&env, &challenge_id);
 
     escrow_client.initialize(&admin, &token.address, &challenge_id);
-    challenge_client.initialize(&admin, &token.address, &escrow_id);
+    challenge_client.initialize(&admin, &escrow_id);
 
     TestSetup {
         env,
@@ -81,13 +81,13 @@ fn test_full_successful_challenge_lifecycle() {
     assert_eq!(setup.token.balance(&setup.challenger), 4000);
     assert_eq!(setup.token.balance(&setup.escrow_id), 1000);
 
-    let ch = client.get_challenge(&cid).unwrap();
+    let ch = client.get_challenge(&cid);
     assert_eq!(ch.status, ChallengeStatus::Created);
     assert_eq!(ch.amount, 1000);
 
     // 2. Participant accepts challenge
     client.accept_challenge(&setup.participant, &cid);
-    let ch_active = client.get_challenge(&cid).unwrap();
+    let ch_active = client.get_challenge(&cid);
     assert_eq!(ch_active.status, ChallengeStatus::Active);
     assert!(ch_active.deadline > 0);
 
@@ -96,7 +96,7 @@ fn test_full_successful_challenge_lifecycle() {
     let proof_notes = String::from_str(env, "Completed all 100 problems successfully!");
     client.submit_proof(&setup.participant, &cid, &proof_url, &proof_notes);
 
-    let ch_proof = client.get_challenge(&cid).unwrap();
+    let ch_proof = client.get_challenge(&cid);
     assert_eq!(ch_proof.status, ChallengeStatus::ProofSubmitted);
     assert_eq!(ch_proof.proof_url, proof_url);
     assert_eq!(ch_proof.proof_notes, proof_notes);
@@ -104,7 +104,7 @@ fn test_full_successful_challenge_lifecycle() {
     // 4. Challenger verifies & approves proof (Payout trigger)
     client.resolve_challenge(&setup.challenger, &cid, &true);
 
-    let ch_done = client.get_challenge(&cid).unwrap();
+    let ch_done = client.get_challenge(&cid);
     assert_eq!(ch_done.status, ChallengeStatus::Completed);
 
     // Verify token transfers via Escrow inter-contract calls
@@ -138,7 +138,7 @@ fn test_challenge_rejection_and_refund() {
     // Participant rejects challenge
     client.reject_challenge(&setup.participant, &cid);
 
-    let ch = client.get_challenge(&cid).unwrap();
+    let ch = client.get_challenge(&cid);
     assert_eq!(ch.status, ChallengeStatus::Rejected);
 
     // Funds refunded to Challenger via Escrow
@@ -169,7 +169,7 @@ fn test_challenge_cancellation_by_challenger() {
     // Challenger cancels before participant accepts
     client.cancel_challenge(&setup.challenger, &cid);
 
-    let ch = client.get_challenge(&cid).unwrap();
+    let ch = client.get_challenge(&cid);
     assert_eq!(ch.status, ChallengeStatus::Cancelled);
 
     assert_eq!(setup.token.balance(&setup.escrow_id), 0);
@@ -205,20 +205,20 @@ fn test_proof_rejection_and_resubmission() {
 
     // Challenger rejects initial proof
     client.resolve_challenge(&setup.challenger, &cid, &false);
-    let ch_rej = client.get_challenge(&cid).unwrap();
+    let ch_rej = client.get_challenge(&cid);
     assert_eq!(ch_rej.status, ChallengeStatus::ProofRejected);
 
     // Participant resubmits updated proof before deadline
     let p2_url = String::from_str(env, "https://github.com/complete");
     let p2_notes = String::from_str(env, "Finished both contracts!");
     client.submit_proof(&setup.participant, &cid, &p2_url, &p2_notes);
-    let ch_sub2 = client.get_challenge(&cid).unwrap();
+    let ch_sub2 = client.get_challenge(&cid);
     assert_eq!(ch_sub2.status, ChallengeStatus::ProofSubmitted);
     assert_eq!(ch_sub2.proof_url, p2_url);
 
     // Challenger approves updated proof
     client.resolve_challenge(&setup.challenger, &cid, &true);
-    let ch_final = client.get_challenge(&cid).unwrap();
+    let ch_final = client.get_challenge(&cid);
     assert_eq!(ch_final.status, ChallengeStatus::Completed);
     assert_eq!(setup.token.balance(&setup.participant), 1200);
 }
@@ -253,7 +253,7 @@ fn test_expired_challenge_refund() {
     // Claim refund after expiration
     client.claim_expired_refund(&setup.challenger, &cid);
 
-    let ch = client.get_challenge(&cid).unwrap();
+    let ch = client.get_challenge(&cid);
     assert_eq!(ch.status, ChallengeStatus::Expired);
 
     assert_eq!(setup.token.balance(&setup.escrow_id), 0);

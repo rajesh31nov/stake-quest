@@ -1,0 +1,44 @@
+name: Full StakeQuest CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*.*.*' ]
+
+jobs:
+  validate-all:
+    name: Master Project Verification
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 1. Run Smart Contract Tests
+        run: cargo test --all
+
+      - name: 2. Build Soroban WASMs
+        run: cargo build --all --target wasm32-unknown-unknown --release
+
+      - name: 3. Install Frontend Dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: 4. Run Vitest Test Suite
+        working-directory: ./frontend
+        run: npm test
+
+      - name: 5. Build Next.js Production Bundle
+        working-directory: ./frontend
+        run: npm run build

@@ -6,41 +6,56 @@ pub mod types;
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, String};
-use stakequest_escrow::EscrowContractClient;
+use soroban_sdk::{
+    contract, contractclient, contractimpl, symbol_short, Address, Env, String,
+};
 use storage::*;
 use types::*;
+
+#[contractclient(name = "EscrowContractClient")]
+pub trait EscrowContractInterface {
+    fn deposit(env: Env, challenge_id: u64, challenger: Address, amount: i128);
+    fn release(env: Env, challenge_id: u64, recipient: Address);
+    fn refund(env: Env, challenge_id: u64);
+}
 
 #[contract]
 pub struct ChallengeContract;
 
 #[contractimpl]
 impl ChallengeContract {
-    /// Initialize the Challenge Management Contract.
     pub fn initialize(
-        e: Env,
+        env: Env,
         admin: Address,
-        token: Address,
         escrow_contract: Address,
     ) -> Result<(), ChallengeError> {
-        if is_initialized(&e) {
+        if is_initialized(&env) {
             return Err(ChallengeError::AlreadyInitialized);
         }
-        set_admin(&e, &admin);
-        set_token(&e, &token);
-        set_escrow_contract(&e, &escrow_contract);
-        set_initialized(&e);
+        admin.require_auth();
 
-        e.events().publish(
-            (symbol_short!("init_ch"), admin),
-            (token, escrow_contract),
-        );
+        set_admin(&env, &admin);
+        set_escrow_contract(&env, &escrow_contract);
+        set_initialized(&env);
+
+        bump_instance(&env);
         Ok(())
     }
 
-    /// Create a new challenge and deposit XLM into escrow via inter-contract call.
+    pub fn get_admin(env: Env) -> Address {
+        get_admin(&env)
+    }
+
+    pub fn get_escrow_contract(env: Env) -> Address {
+        get_escrow_contract(&env)
+    }
+
+    pub fn get_challenge_count(env: Env) -> u64 {
+        get_challenge_count(&env)
+    }
+
     pub fn create_challenge(
-        e: Env,
+        env: Env,
         challenger: Address,
         participant: Address,
         amount: i128,
@@ -49,10 +64,6 @@ impl ChallengeContract {
         description: String,
         requirements: String,
     ) -> Result<u64, ChallengeError> {
-        if !is_initialized(&e) {
-            return Err(ChallengeError::NotInitialized);
-        }
-
         challenger.require_auth();
 
         if challenger == participant {
@@ -65,54 +76,50 @@ impl ChallengeContract {
             return Err(ChallengeError::InvalidDuration);
         }
 
-        let challenge_id = increment_challenge_count(&e);
+        let challenge_id = increment_challenge_count(&env);
+        let created_at = env.ledger().timestamp();
 
-        // Execute inter-contract deposit call to Escrow contract
-        let escrow_addr = get_escrow_contract(&e);
-        let escrow_client = EscrowContractClient::new(&e, &escrow_addr);
-        escrow_client.deposit(&challenge_id, &challenger, &amount);
-
-        let now = e.ledger().timestamp();
         let challenge = Challenge {
             id: challenge_id,
             challenger: challenger.clone(),
             participant: participant.clone(),
             amount,
             duration,
-            deadline: 0, // Set when participant accepts
+            deadline: 0,
             status: ChallengeStatus::Created,
             title,
             description,
             requirements,
-            proof_url: String::from_str(&e, ""),
-            proof_notes: String::from_str(&e, ""),
+            proof_url: String::from_str(&env, ""),
+            proof_notes: String::from_str(&env, ""),
             proof_submitted_at: 0,
-            created_at: now,
+            created_at,
         };
 
-        set_challenge(&e, challenge_id, &challenge);
+        set_challenge(&env, challenge_id, &challenge);
 
-        e.events().publish(
+        // Inter-contract call to Escrow contract: (challenge_id, challenger, amount)
+        let escrow_addr = get_escrow_contract(&env);
+        let escrow_client = EscrowContractClient::new(&env, &escrow_addr);
+        escrow_client.deposit(&challenge_id, &challenger, &amount);
+
+        env.events().publish(
             (symbol_short!("ch_create"), challenge_id),
-            (challenger, participant, amount, duration),
+            (challenger, participant, amount),
         );
 
+        bump_instance(&env);
         Ok(challenge_id)
     }
 
-    /// Participant accepts the challenge. Starts the countdown timer.
     pub fn accept_challenge(
-        e: Env,
+        env: Env,
         participant: Address,
         challenge_id: u64,
     ) -> Result<(), ChallengeError> {
-        if !is_initialized(&e) {
-            return Err(ChallengeError::NotInitialized);
-        }
-
         participant.require_auth();
 
-        let mut challenge = get_challenge(&e, challenge_id).ok_or(ChallengeError::ChallengeNotFound)?;
+        let mut challenge = get_challenge(&env, challenge_id).ok_or(ChallengeError::ChallengeNotFound)?;
 
         if challenge.participant != participant {
             return Err(ChallengeError::ParticipantMismatch);
@@ -121,35 +128,29 @@ impl ChallengeContract {
             return Err(ChallengeError::InvalidState);
         }
 
-        let now = e.ledger().timestamp();
-        let deadline = now + challenge.duration;
-
+        let current_time = env.ledger().timestamp();
         challenge.status = ChallengeStatus::Active;
-        challenge.deadline = deadline;
+        challenge.deadline = current_time + challenge.duration;
 
-        set_challenge(&e, challenge_id, &challenge);
+        set_challenge(&env, challenge_id, &challenge);
 
-        e.events().publish(
+        env.events().publish(
             (symbol_short!("ch_active"), challenge_id),
-            (participant, deadline),
+            (participant, challenge.deadline),
         );
 
+        bump_instance(&env);
         Ok(())
     }
 
-    /// Participant rejects the challenge before accepting. Funds are returned to Challenger via Escrow.
     pub fn reject_challenge(
-        e: Env,
+        env: Env,
         participant: Address,
         challenge_id: u64,
     ) -> Result<(), ChallengeError> {
-        if !is_initialized(&e) {
-            return Err(ChallengeError::NotInitialized);
-        }
-
         participant.require_auth();
 
-        let mut challenge = get_challenge(&e, challenge_id).ok_or(ChallengeError::ChallengeNotFound)?;
+        let mut challenge = get_challenge(&env, challenge_id).ok_or(ChallengeError::ChallengeNotFound)?;
 
         if challenge.participant != participant {
             return Err(ChallengeError::ParticipantMismatch);
@@ -159,34 +160,29 @@ impl ChallengeContract {
         }
 
         challenge.status = ChallengeStatus::Rejected;
-        set_challenge(&e, challenge_id, &challenge);
+        set_challenge(&env, challenge_id, &challenge);
 
-        // Execute inter-contract refund call to Escrow contract
-        let escrow_addr = get_escrow_contract(&e);
-        let escrow_client = EscrowContractClient::new(&e, &escrow_addr);
+        let escrow_addr = get_escrow_contract(&env);
+        let escrow_client = EscrowContractClient::new(&env, &escrow_addr);
         escrow_client.refund(&challenge_id);
 
-        e.events().publish(
+        env.events().publish(
             (symbol_short!("ch_rej"), challenge_id),
-            participant,
+            (participant, challenge.challenger),
         );
 
+        bump_instance(&env);
         Ok(())
     }
 
-    /// Challenger cancels the challenge before participant accepts. Funds returned to Challenger via Escrow.
     pub fn cancel_challenge(
-        e: Env,
+        env: Env,
         challenger: Address,
         challenge_id: u64,
     ) -> Result<(), ChallengeError> {
-        if !is_initialized(&e) {
-            return Err(ChallengeError::NotInitialized);
-        }
-
         challenger.require_auth();
 
-        let mut challenge = get_challenge(&e, challenge_id).ok_or(ChallengeError::ChallengeNotFound)?;
+        let mut challenge = get_challenge(&env, challenge_id).ok_or(ChallengeError::ChallengeNotFound)?;
 
         if challenge.challenger != challenger {
             return Err(ChallengeError::ChallengerMismatch);
@@ -196,36 +192,31 @@ impl ChallengeContract {
         }
 
         challenge.status = ChallengeStatus::Cancelled;
-        set_challenge(&e, challenge_id, &challenge);
+        set_challenge(&env, challenge_id, &challenge);
 
-        // Execute inter-contract refund call to Escrow contract
-        let escrow_addr = get_escrow_contract(&e);
-        let escrow_client = EscrowContractClient::new(&e, &escrow_addr);
+        let escrow_addr = get_escrow_contract(&env);
+        let escrow_client = EscrowContractClient::new(&env, &escrow_addr);
         escrow_client.refund(&challenge_id);
 
-        e.events().publish(
+        env.events().publish(
             (symbol_short!("ch_canc"), challenge_id),
-            challenger,
+            (challenger, challenge.amount),
         );
 
+        bump_instance(&env);
         Ok(())
     }
 
-    /// Participant submits proof of completion before deadline.
     pub fn submit_proof(
-        e: Env,
+        env: Env,
         participant: Address,
         challenge_id: u64,
         proof_url: String,
         notes: String,
     ) -> Result<(), ChallengeError> {
-        if !is_initialized(&e) {
-            return Err(ChallengeError::NotInitialized);
-        }
-
         participant.require_auth();
 
-        let mut challenge = get_challenge(&e, challenge_id).ok_or(ChallengeError::ChallengeNotFound)?;
+        let mut challenge = get_challenge(&env, challenge_id).ok_or(ChallengeError::ChallengeNotFound)?;
 
         if challenge.participant != participant {
             return Err(ChallengeError::ParticipantMismatch);
@@ -234,40 +225,36 @@ impl ChallengeContract {
             return Err(ChallengeError::InvalidState);
         }
 
-        let now = e.ledger().timestamp();
-        if now > challenge.deadline {
+        let current_time = env.ledger().timestamp();
+        if current_time > challenge.deadline {
             return Err(ChallengeError::DeadlinePassed);
         }
 
         challenge.status = ChallengeStatus::ProofSubmitted;
         challenge.proof_url = proof_url.clone();
-        challenge.proof_notes = notes;
-        challenge.proof_submitted_at = now;
+        challenge.proof_notes = notes.clone();
+        challenge.proof_submitted_at = current_time;
 
-        set_challenge(&e, challenge_id, &challenge);
+        set_challenge(&env, challenge_id, &challenge);
 
-        e.events().publish(
+        env.events().publish(
             (symbol_short!("ch_proof"), challenge_id),
-            (participant, proof_url),
+            (participant, proof_url, notes),
         );
 
+        bump_instance(&env);
         Ok(())
     }
 
-    /// Challenger resolves the proof. If approve=true, releases funds to Participant. If approve=false, marks ProofRejected.
     pub fn resolve_challenge(
-        e: Env,
+        env: Env,
         challenger: Address,
         challenge_id: u64,
         approve: bool,
     ) -> Result<(), ChallengeError> {
-        if !is_initialized(&e) {
-            return Err(ChallengeError::NotInitialized);
-        }
-
         challenger.require_auth();
 
-        let mut challenge = get_challenge(&e, challenge_id).ok_or(ChallengeError::ChallengeNotFound)?;
+        let mut challenge = get_challenge(&env, challenge_id).ok_or(ChallengeError::ChallengeNotFound)?;
 
         if challenge.challenger != challenger {
             return Err(ChallengeError::ChallengerMismatch);
@@ -276,46 +263,40 @@ impl ChallengeContract {
             return Err(ChallengeError::InvalidState);
         }
 
-        let escrow_addr = get_escrow_contract(&e);
-        let escrow_client = EscrowContractClient::new(&e, &escrow_addr);
-
         if approve {
             challenge.status = ChallengeStatus::Completed;
-            set_challenge(&e, challenge_id, &challenge);
+            set_challenge(&env, challenge_id, &challenge);
 
-            // Execute inter-contract release call to Escrow contract
+            let escrow_addr = get_escrow_contract(&env);
+            let escrow_client = EscrowContractClient::new(&env, &escrow_addr);
             escrow_client.release(&challenge_id, &challenge.participant);
 
-            e.events().publish(
+            env.events().publish(
                 (symbol_short!("ch_done"), challenge_id),
-                (challenger, challenge.participant),
+                (challenger, challenge.participant, challenge.amount),
             );
         } else {
             challenge.status = ChallengeStatus::ProofRejected;
-            set_challenge(&e, challenge_id, &challenge);
+            set_challenge(&env, challenge_id, &challenge);
 
-            e.events().publish(
+            env.events().publish(
                 (symbol_short!("ch_prej"), challenge_id),
-                challenger,
+                (challenger, challenge.participant),
             );
         }
 
+        bump_instance(&env);
         Ok(())
     }
 
-    /// Claim refund for expired challenge after deadline has passed without completion.
     pub fn claim_expired_refund(
-        e: Env,
+        env: Env,
         caller: Address,
         challenge_id: u64,
     ) -> Result<(), ChallengeError> {
-        if !is_initialized(&e) {
-            return Err(ChallengeError::NotInitialized);
-        }
-
         caller.require_auth();
 
-        let mut challenge = get_challenge(&e, challenge_id).ok_or(ChallengeError::ChallengeNotFound)?;
+        let mut challenge = get_challenge(&env, challenge_id).ok_or(ChallengeError::ChallengeNotFound)?;
 
         if challenge.status != ChallengeStatus::Active
             && challenge.status != ChallengeStatus::ProofSubmitted
@@ -324,52 +305,36 @@ impl ChallengeContract {
             return Err(ChallengeError::InvalidState);
         }
 
-        let now = e.ledger().timestamp();
-        if now <= challenge.deadline {
+        let current_time = env.ledger().timestamp();
+        if current_time <= challenge.deadline {
             return Err(ChallengeError::DeadlineNotPassed);
         }
 
         challenge.status = ChallengeStatus::Expired;
-        set_challenge(&e, challenge_id, &challenge);
+        set_challenge(&env, challenge_id, &challenge);
 
-        // Inter-contract refund call to Escrow contract
-        let escrow_addr = get_escrow_contract(&e);
-        let escrow_client = EscrowContractClient::new(&e, &escrow_addr);
+        let escrow_addr = get_escrow_contract(&env);
+        let escrow_client = EscrowContractClient::new(&env, &escrow_addr);
         escrow_client.refund(&challenge_id);
 
-        e.events().publish(
+        env.events().publish(
             (symbol_short!("ch_exp"), challenge_id),
-            (caller, challenge.challenger),
+            (caller, challenge.challenger, challenge.amount),
         );
 
+        bump_instance(&env);
         Ok(())
     }
 
-    /// Get challenge details by ID
-    pub fn get_challenge(e: Env, challenge_id: u64) -> Option<Challenge> {
-        get_challenge(&e, challenge_id)
+    pub fn get_challenge(env: Env, challenge_id: u64) -> Result<Challenge, ChallengeError> {
+        get_challenge(&env, challenge_id).ok_or(ChallengeError::ChallengeNotFound)
     }
 
-    /// Get total challenge count
-    pub fn get_challenge_count(e: Env) -> u64 {
-        get_challenge_count(&e)
-    }
-
-    /// Get admin address
-    pub fn get_admin(e: Env) -> Address {
-        get_admin(&e)
-    }
-
-    /// Get Escrow contract address
-    pub fn get_escrow_contract(e: Env) -> Address {
-        get_escrow_contract(&e)
-    }
-
-    /// Upgrade contract WASM byte code (Admin only)
-    pub fn upgrade(e: Env, new_wasm_hash: BytesN<32>) -> Result<(), ChallengeError> {
-        let admin = get_admin(&e);
+    pub fn upgrade(env: Env, new_wasm_hash: soroban_sdk::BytesN<32>) -> Result<(), ChallengeError> {
+        let admin = get_admin(&env);
         admin.require_auth();
-        e.deployer().update_current_contract_wasm(new_wasm_hash);
+
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
         Ok(())
     }
 }

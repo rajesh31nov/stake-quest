@@ -1,19 +1,49 @@
 import { create } from "zustand";
-import { TransactionRecord, TransactionStatus } from "@/types/stellar";
+
+export type FullTransactionStatus =
+  | "PENDING"
+  | "PREPARING"
+  | "SIGNING"
+  | "SUBMITTED"
+  | "PROCESSING"
+  | "CONFIRMED"
+  | "FAILED"
+  | "EXPIRED"
+  | "CANCELLED";
+
+export interface TransactionCenterItem {
+  id: string;
+  hash?: string;
+  title: string;
+  description: string;
+  status: FullTransactionStatus;
+  timestamp: number;
+  error?: string;
+  explorerUrl?: string;
+  retryAction?: () => Promise<void>;
+}
 
 interface TransactionStoreState {
-  transactions: TransactionRecord[];
-  addTransaction: (tx: Omit<TransactionRecord, "timestamp">) => void;
-  updateTransactionStatus: (
+  transactions: TransactionCenterItem[];
+  addTransaction: (tx: Omit<TransactionCenterItem, "timestamp">) => void;
+  updateStatus: (
     id: string,
-    status: TransactionStatus,
+    status: FullTransactionStatus,
     hash?: string,
     error?: string
   ) => void;
-  clearTransactions: () => void;
+  updateTransactionStatus: (
+    id: string,
+    status: FullTransactionStatus,
+    hash?: string,
+    error?: string
+  ) => void;
+  setRetryAction: (id: string, action: () => Promise<void>) => void;
+  removeTransaction: (id: string) => void;
+  clearAll: () => void;
 }
 
-export const useTransactionStore = create<TransactionStoreState>((set) => ({
+export const useTransactionStore = create<TransactionStoreState>((set, get) => ({
   transactions: [],
 
   addTransaction: (tx) =>
@@ -23,11 +53,11 @@ export const useTransactionStore = create<TransactionStoreState>((set) => ({
           ...tx,
           timestamp: Date.now(),
         },
-        ...state.transactions,
+        ...state.transactions.filter((t) => t.id !== tx.id),
       ],
     })),
 
-  updateTransactionStatus: (id, status, hash, error) =>
+  updateStatus: (id, status, hash, error) =>
     set((state) => ({
       transactions: state.transactions.map((tx) =>
         tx.id === id
@@ -41,5 +71,21 @@ export const useTransactionStore = create<TransactionStoreState>((set) => ({
       ),
     })),
 
-  clearTransactions: () => set({ transactions: [] }),
+  updateTransactionStatus: (id, status, hash, error) => {
+    get().updateStatus(id, status, hash, error);
+  },
+
+  setRetryAction: (id, retryAction) =>
+    set((state) => ({
+      transactions: state.transactions.map((tx) =>
+        tx.id === id ? { ...tx, retryAction } : tx
+      ),
+    })),
+
+  removeTransaction: (id) =>
+    set((state) => ({
+      transactions: state.transactions.filter((t) => t.id !== id),
+    })),
+
+  clearAll: () => set({ transactions: [] }),
 }));

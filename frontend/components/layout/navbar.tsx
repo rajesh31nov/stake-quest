@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Trophy, PlusCircle, Inbox, Send, UserCheck } from "lucide-react";
+import { Trophy, PlusCircle, Inbox, Send, UserCheck, Activity, History } from "lucide-react";
 import { WalletButton } from "@/components/wallet/wallet-button";
 
 export function Navbar() {
@@ -24,25 +24,33 @@ export function Navbar() {
         </Link>
 
         {/* Navigation Links */}
-        <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-300">
+        <nav className="hidden lg:flex items-center gap-5 text-xs font-semibold text-slate-300">
           <Link href="/" className="hover:text-amber-400 transition-colors">
             Dashboard
           </Link>
           <Link href="/create" className="hover:text-amber-400 transition-colors flex items-center gap-1.5">
-            <PlusCircle className="w-4 h-4 text-amber-400" />
+            <PlusCircle className="w-3.5 h-3.5 text-amber-400" />
             Create
           </Link>
           <Link href="/received" className="hover:text-amber-400 transition-colors flex items-center gap-1.5">
-            <Inbox className="w-4 h-4 text-cyan-400" />
+            <Inbox className="w-3.5 h-3.5 text-cyan-400" />
             Received
           </Link>
           <Link href="/sent" className="hover:text-amber-400 transition-colors flex items-center gap-1.5">
-            <Send className="w-4 h-4 text-amber-400" />
+            <Send className="w-3.5 h-3.5 text-amber-400" />
             Sent
           </Link>
           <Link href="/my-challenges" className="hover:text-amber-400 transition-colors flex items-center gap-1.5">
-            <UserCheck className="w-4 h-4 text-purple-400" />
+            <UserCheck className="w-3.5 h-3.5 text-purple-400" />
             My Challenges
+          </Link>
+          <Link href="/activity" className="hover:text-amber-400 transition-colors flex items-center gap-1.5">
+            <Activity className="w-3.5 h-3.5 text-emerald-400" />
+            Activity
+          </Link>
+          <Link href="/transactions" className="hover:text-amber-400 transition-colors flex items-center gap-1.5">
+            <History className="w-3.5 h-3.5 text-cyan-400" />
+            Tx Center
           </Link>
         </nav>
 

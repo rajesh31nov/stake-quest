@@ -25,17 +25,56 @@ export class ChallengeContractService {
     return this.contractId;
   }
 
-  /**
-   * Build & submit create_challenge transaction to Soroban
-   */
+  private async executeTx(
+    publicKey: string,
+    operationName: string,
+    callArgs: any[]
+  ): Promise<string> {
+    const rpcServer = stellarRpcService.getServer();
+    const account = await stellarRpcService.loadAccount(publicKey);
+    const contract = new Contract(this.contractId);
+
+    const tx = new TransactionBuilder(account, {
+      fee: BASE_FEE,
+      networkPassphrase: STELLAR_CONFIG.TESTNET.networkPassphrase,
+    })
+      .addOperation(contract.call(operationName, ...callArgs))
+      .setTimeout(30)
+      .build();
+
+    const simulated = await rpcServer.simulateTransaction(tx);
+    if (rpc.Api.isSimulationError(simulated)) {
+      throw new Error(`Simulation failed: ${simulated.error}`);
+    }
+
+    const preparedTx = rpc.assembleTransaction(tx, simulated).build();
+    const signedXdr = await walletKitService.signTransaction(preparedTx.toXDR());
+
+    const sendRes = await rpcServer.sendTransaction(
+      TransactionBuilder.fromXDR(signedXdr, STELLAR_CONFIG.TESTNET.networkPassphrase)
+    );
+
+    if (sendRes.status === "ERROR") {
+      throw new Error(`Transaction rejected by network: ${JSON.stringify(sendRes)}`);
+    }
+
+    let getTxRes = await rpcServer.getTransaction(sendRes.hash);
+    while (getTxRes.status === "NOT_FOUND") {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      getTxRes = await rpcServer.getTransaction(sendRes.hash);
+    }
+
+    if (getTxRes.status === "FAILED") {
+      throw new Error("Transaction execution failed on-chain.");
+    }
+
+    return sendRes.hash;
+  }
+
   public async createChallenge(
     challengerPublicKey: string,
     input: CreateChallengeInput
   ): Promise<{ challengeId: number; txHash: string }> {
-    const rpcServer = stellarRpcService.getServer();
-    const account = await stellarRpcService.loadAccount(challengerPublicKey);
-    const contract = new Contract(this.contractId);
-
     const amountStroops = xlmToStroops(input.amountXlm);
     const durationSeconds = BigInt(input.durationDays * 86400);
 
@@ -49,58 +88,70 @@ export class ChallengeContractService {
       nativeToScVal(input.requirements, { type: "string" }),
     ];
 
-    const tx = new TransactionBuilder(account, {
-      fee: BASE_FEE,
-      networkPassphrase: STELLAR_CONFIG.TESTNET.networkPassphrase,
-    })
-      .addOperation(contract.call("create_challenge", ...callArgs))
-      .setTimeout(30)
-      .build();
-
-    // 1. Simulate transaction on Soroban RPC
-    const simulated = await rpcServer.simulateTransaction(tx);
-    if (rpc.Api.isSimulationError(simulated)) {
-      throw new Error(`Simulation failed: ${simulated.error}`);
-    }
-
-    // 2. Assemble transaction with simulation footprint & fees
-    const preparedTx = rpc.assembleTransaction(tx, simulated).build();
-
-    // 3. Sign transaction via WalletKit
-    const signedXdr = await walletKitService.signTransaction(preparedTx.toXDR());
-
-    // 4. Send transaction to Stellar network
-    const sendRes = await rpcServer.sendTransaction(
-      TransactionBuilder.fromXDR(signedXdr, STELLAR_CONFIG.TESTNET.networkPassphrase)
-    );
-
-    if (sendRes.status === "ERROR") {
-      throw new Error(`Transaction rejected by network: ${JSON.stringify(sendRes)}`);
-    }
-
-    // 5. Poll for confirmation
-    let getTxRes = await rpcServer.getTransaction(sendRes.hash);
-    while (getTxRes.status === "NOT_FOUND") {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      getTxRes = await rpcServer.getTransaction(sendRes.hash);
-    }
-
-    if (getTxRes.status === "FAILED") {
-      throw new Error("Transaction execution failed on-chain.");
-    }
-
-    const returnValue = getTxRes.returnValue;
-    const challengeId = returnValue ? Number(scValToNative(returnValue)) : 1;
-
-    return {
-      challengeId,
-      txHash: sendRes.hash,
-    };
+    const txHash = await this.executeTx(challengerPublicKey, "create_challenge", callArgs);
+    return { challengeId: 1, txHash };
   }
 
-  /**
-   * Fetch challenge details by ID from Soroban RPC simulation read
-   */
+  public async acceptChallenge(participantPublicKey: string, challengeId: number): Promise<string> {
+    const callArgs = [
+      new Address(participantPublicKey).toScVal(),
+      nativeToScVal(BigInt(challengeId), { type: "u64" }),
+    ];
+    return await this.executeTx(participantPublicKey, "accept_challenge", callArgs);
+  }
+
+  public async rejectChallenge(participantPublicKey: string, challengeId: number): Promise<string> {
+    const callArgs = [
+      new Address(participantPublicKey).toScVal(),
+      nativeToScVal(BigInt(challengeId), { type: "u64" }),
+    ];
+    return await this.executeTx(participantPublicKey, "reject_challenge", callArgs);
+  }
+
+  public async cancelChallenge(challengerPublicKey: string, challengeId: number): Promise<string> {
+    const callArgs = [
+      new Address(challengerPublicKey).toScVal(),
+      nativeToScVal(BigInt(challengeId), { type: "u64" }),
+    ];
+    return await this.executeTx(challengerPublicKey, "cancel_challenge", callArgs);
+  }
+
+  public async submitProof(
+    participantPublicKey: string,
+    challengeId: number,
+    proofUrl: string,
+    notes: string
+  ): Promise<string> {
+    const callArgs = [
+      new Address(participantPublicKey).toScVal(),
+      nativeToScVal(BigInt(challengeId), { type: "u64" }),
+      nativeToScVal(proofUrl, { type: "string" }),
+      nativeToScVal(notes, { type: "string" }),
+    ];
+    return await this.executeTx(participantPublicKey, "submit_proof", callArgs);
+  }
+
+  public async resolveChallenge(
+    challengerPublicKey: string,
+    challengeId: number,
+    approve: boolean
+  ): Promise<string> {
+    const callArgs = [
+      new Address(challengerPublicKey).toScVal(),
+      nativeToScVal(BigInt(challengeId), { type: "u64" }),
+      nativeToScVal(approve, { type: "bool" }),
+    ];
+    return await this.executeTx(challengerPublicKey, "resolve_challenge", callArgs);
+  }
+
+  public async claimExpiredRefund(callerPublicKey: string, challengeId: number): Promise<string> {
+    const callArgs = [
+      new Address(callerPublicKey).toScVal(),
+      nativeToScVal(BigInt(challengeId), { type: "u64" }),
+    ];
+    return await this.executeTx(callerPublicKey, "claim_expired_refund", callArgs);
+  }
+
   public async getChallenge(challengeId: number): Promise<ChallengeModel | null> {
     try {
       const rpcServer = stellarRpcService.getServer();
@@ -146,6 +197,31 @@ export class ChallengeContractService {
     } catch (err) {
       console.error("Failed to query challenge:", err);
       return null;
+    }
+  }
+
+  public async getChallengeCount(): Promise<number> {
+    try {
+      const rpcServer = stellarRpcService.getServer();
+      const dummyAddr = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
+      const contract = new Contract(this.contractId);
+
+      const tx = new TransactionBuilder(
+        new Account(dummyAddr, "0"),
+        {
+          fee: BASE_FEE,
+          networkPassphrase: STELLAR_CONFIG.TESTNET.networkPassphrase,
+        }
+      )
+        .addOperation(contract.call("get_challenge_count"))
+        .setTimeout(30)
+        .build();
+
+      const sim = await rpcServer.simulateTransaction(tx);
+      if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) return 0;
+      return Number(scValToNative(sim.result.retval));
+    } catch {
+      return 0;
     }
   }
 }

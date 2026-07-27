@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ShieldAlert, PlusCircle, Trophy } from "lucide-react";
+import { Trophy, PlusCircle, Inbox, Send, UserCheck } from "lucide-react";
 import { WalletButton } from "@/components/wallet/wallet-button";
 
 export function Navbar() {
@@ -25,18 +25,24 @@ export function Navbar() {
 
         {/* Navigation Links */}
         <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-300">
-          <Link
-            href="/"
-            className="hover:text-amber-400 transition-colors flex items-center gap-1.5"
-          >
+          <Link href="/" className="hover:text-amber-400 transition-colors">
             Dashboard
           </Link>
-          <Link
-            href="/create"
-            className="hover:text-amber-400 transition-colors flex items-center gap-1.5"
-          >
+          <Link href="/create" className="hover:text-amber-400 transition-colors flex items-center gap-1.5">
             <PlusCircle className="w-4 h-4 text-amber-400" />
-            Create Challenge
+            Create
+          </Link>
+          <Link href="/received" className="hover:text-amber-400 transition-colors flex items-center gap-1.5">
+            <Inbox className="w-4 h-4 text-cyan-400" />
+            Received
+          </Link>
+          <Link href="/sent" className="hover:text-amber-400 transition-colors flex items-center gap-1.5">
+            <Send className="w-4 h-4 text-amber-400" />
+            Sent
+          </Link>
+          <Link href="/my-challenges" className="hover:text-amber-400 transition-colors flex items-center gap-1.5">
+            <UserCheck className="w-4 h-4 text-purple-400" />
+            My Challenges
           </Link>
         </nav>
 

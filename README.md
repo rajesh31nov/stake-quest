@@ -81,9 +81,24 @@ cd frontend
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+
 
 ---
+
+## Deployed Smart Contracts
+
+### 1st Deployed Contract (Challenge Contract)
+- Network : Stellar Testnet
+- Contract Address : CCHDS5MYWM4CFUN6GMCI4J65JXKEVWDBSBV7IMD6TZILE4WI5GZC7V5A
+- Contract Explorar : https://stellar.expert/explorer/testnet/contract/CCHDS5MYWM4CFUN6GMCI4J65JXKEVWDBSBV7IMD6TZILE4WI5GZC7V5A
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/f4a4703c-dc7c-46d2-bc30-92e06e8eb1d6" />
+
+### 2nd Deployed Contract (Escrow Contract)
+- Network : Stellar Testnet
+- Contract Address : CDCK7GNCJ6BFLKOH72PFR7G4VKEZ5MO5UL46P52QSEQPZ4WUZOS46ZOQ
+- Contract Explorar : https://stellar.expert/explorer/testnet/contract/CDCK7GNCJ6BFLKOH72PFR7G4VKEZ5MO5UL46P52QSEQPZ4WUZOS46ZOQ
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/3b47d999-c15d-4594-8de8-9ee6c6a5dfe7" />
+
 
 ## 📄 License
 

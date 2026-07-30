@@ -6,6 +6,19 @@ export function truncateAddress(address: string | null | undefined, chars = 4): 
   return `${address.slice(0, chars + 2)}...${address.slice(-chars)}`;
 }
 
+export function truncateHash(hash: string | null | undefined, chars = 6): string {
+  if (!hash) return "";
+  if (hash.length <= chars * 2) return hash;
+  return `${hash.slice(0, chars)}...${hash.slice(-chars)}`;
+}
+
+export function getStellarExplorerTxUrl(hash?: string): string {
+  if (hash && hash.length === 64 && !hash.startsWith("tx_")) {
+    return `https://stellar.expert/explorer/testnet/tx/${hash}`;
+  }
+  return `https://stellar.expert/explorer/testnet/contract/${STELLAR_CONFIG.TESTNET.challengeContractId}`;
+}
+
 export function stroopsToXlm(stroops: bigint): string {
   const xlm = Number(stroops) / Number(STELLAR_CONFIG.STROOPS_PER_XLM);
   return xlm.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 7 });

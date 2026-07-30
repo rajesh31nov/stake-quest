@@ -29,6 +29,7 @@ export interface ChallengeModel {
   requirements: string;
   proof: ChallengeProof | null;
   createdAt: number;
+  txHash?: string;
 }
 
 export interface CreateChallengeInput {

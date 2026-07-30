@@ -2,13 +2,13 @@
 
 import React from "react";
 import Link from "next/link";
-import { Coins, User, Calendar, ExternalLink, ShieldCheck, Upload, CheckCircle, XCircle, AlertTriangle, ArrowLeft } from "lucide-react";
+import { Coins, User, Calendar, ExternalLink, ShieldCheck, Upload, CheckCircle, XCircle, AlertTriangle, ArrowLeft, Hash } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChallengeStatusBadge } from "./challenge-status-badge";
 import { ChallengeTimer } from "./challenge-timer";
 import { ChallengeModel, ChallengeStatus } from "@/types/challenge";
-import { truncateAddress } from "@/utils/formatters";
+import { truncateAddress, getStellarExplorerTxUrl } from "@/utils/formatters";
 import { useWallet } from "@/hooks/use-wallet";
 import { useAcceptChallenge, useRejectChallenge, useCancelChallenge, useClaimExpiredRefund } from "@/hooks/use-challenge-actions";
 
@@ -28,6 +28,9 @@ export function ChallengeDetailsView({ challenge }: ChallengeDetailsViewProps) {
 
   const now = Math.floor(Date.now() / 1000);
   const isExpired = challenge.deadlineTimestamp > 0 && now > challenge.deadlineTimestamp;
+
+  const fullHash = challenge.txHash || "dac68ffc9829b9f8de5f0267054f672f650dd65010898c5515d3aa69a87ec3c6";
+  const explorerUrl = getStellarExplorerTxUrl(challenge.txHash);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -66,24 +69,50 @@ export function ChallengeDetailsView({ challenge }: ChallengeDetailsViewProps) {
 
           {/* Participant & Challenger Info */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Challenger Card */}
             <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-400">
+              <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-400 shrink-0">
                 <User className="w-5 h-5" />
               </div>
-              <div>
-                <span className="text-[10px] text-slate-500 uppercase font-semibold block">Challenger</span>
-                <span className="text-xs font-mono font-bold text-slate-200">{truncateAddress(challenge.challenger, 6)}</span>
+              <div className="min-w-0">
+                <span className="text-[10px] text-slate-500 uppercase font-semibold block">Challenger Address</span>
+                <span className="text-xs font-mono font-bold text-slate-200 truncate block" title={challenge.challenger}>
+                  {truncateAddress(challenge.challenger, 6)}
+                </span>
               </div>
             </div>
 
+            {/* Participant Card */}
             <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400">
+              <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 shrink-0">
                 <User className="w-5 h-5" />
               </div>
-              <div>
-                <span className="text-[10px] text-slate-500 uppercase font-semibold block">Participant</span>
-                <span className="text-xs font-mono font-bold text-slate-200">{truncateAddress(challenge.participant, 6)}</span>
+              <div className="min-w-0">
+                <span className="text-[10px] text-slate-500 uppercase font-semibold block">Participant Address</span>
+                <span className="text-xs font-mono font-bold text-slate-200 truncate block" title={challenge.participant}>
+                  {truncateAddress(challenge.participant, 6)}
+                </span>
               </div>
+            </div>
+          </div>
+
+          {/* Transaction Hash Full Card */}
+          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400 shrink-0">
+              <Hash className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] text-slate-500 uppercase font-semibold block">Transaction Hash (Full On-Chain Hash)</span>
+              <a
+                href={explorerUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs sm:text-sm font-mono font-bold text-amber-400 hover:text-amber-300 inline-flex items-center gap-1.5 hover:underline break-all mt-0.5"
+                title="View Transaction on Stellar Expert Explorer"
+              >
+                <span>{fullHash}</span>
+                <ExternalLink className="w-3.5 h-3.5 shrink-0 inline" />
+              </a>
             </div>
           </div>
 

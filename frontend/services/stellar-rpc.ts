@@ -14,16 +14,20 @@ export class StellarRpcService {
 
   public async getAccountBalance(publicKey: string): Promise<string> {
     try {
-      const account: any = await this.server.getAccount(publicKey);
-      if (account && Array.isArray(account.balances)) {
-        const nativeBalance = account.balances.find(
-          (b: any) => b.asset_type === "native"
-        );
-        return nativeBalance ? nativeBalance.balance : "0.00";
+      const res = await fetch(`https://horizon-testnet.stellar.org/accounts/${publicKey}`, { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        const nativeBalance = data.balances?.find((b: any) => b.asset_type === "native");
+        if (nativeBalance) {
+          const num = parseFloat(nativeBalance.balance);
+          return isNaN(num)
+            ? "0.00"
+            : num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
       }
       return "0.00";
     } catch (err) {
-      console.warn("Account not found or unfunded on Testnet:", publicKey);
+      console.warn("Failed to fetch balance from Horizon:", err);
       return "0.00";
     }
   }

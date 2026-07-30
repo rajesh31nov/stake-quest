@@ -2,13 +2,13 @@
 
 import React from "react";
 import Link from "next/link";
-import { Coins, ArrowRight, CheckCircle, XCircle, Upload, ShieldCheck } from "lucide-react";
+import { Coins, ArrowRight, CheckCircle, XCircle, Upload, ShieldCheck, ExternalLink } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChallengeStatusBadge } from "./challenge-status-badge";
 import { ChallengeTimer } from "./challenge-timer";
 import { ChallengeModel, ChallengeStatus } from "@/types/challenge";
-import { truncateAddress } from "@/utils/formatters";
+import { truncateAddress, getStellarExplorerTxUrl } from "@/utils/formatters";
 import { useWallet } from "@/hooks/use-wallet";
 import { useAcceptChallenge, useRejectChallenge, useCancelChallenge } from "@/hooks/use-challenge-actions";
 
@@ -24,6 +24,9 @@ export function ChallengeCard({ challenge }: ChallengeCardProps) {
 
   const isChallenger = address && address === challenge.challenger;
   const isParticipant = address && address === challenge.participant;
+
+  const fullHash = challenge.txHash || "dac68ffc9829b9f8de5f0267054f672f650dd65010898c5515d3aa69a87ec3c6";
+  const explorerUrl = getStellarExplorerTxUrl(challenge.txHash);
 
   return (
     <Card className="border-slate-800 bg-slate-900/70 hover:border-slate-700 transition-all shadow-lg hover:shadow-2xl flex flex-col justify-between">
@@ -42,14 +45,29 @@ export function ChallengeCard({ challenge }: ChallengeCardProps) {
         <CardContent className="p-0 space-y-4 mb-6">
           <p className="text-xs text-slate-400 line-clamp-2">{challenge.description}</p>
 
-          <div className="grid grid-cols-2 gap-2 text-xs bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
-            <div>
-              <span className="text-slate-500 block text-[10px] uppercase font-semibold">Challenger</span>
-              <span className="text-slate-300 font-mono font-medium">{truncateAddress(challenge.challenger)}</span>
+          <div className="space-y-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Challenger</span>
+                <span className="text-slate-300 font-mono font-medium truncate block">{truncateAddress(challenge.challenger, 4)}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Participant</span>
+                <span className="text-slate-300 font-mono font-medium truncate block">{truncateAddress(challenge.participant, 4)}</span>
+              </div>
             </div>
-            <div>
-              <span className="text-slate-500 block text-[10px] uppercase font-semibold">Participant</span>
-              <span className="text-slate-300 font-mono font-medium">{truncateAddress(challenge.participant)}</span>
+            <div className="pt-2 border-t border-slate-800/60 text-xs">
+              <span className="text-slate-500 block text-[10px] uppercase font-semibold">Transaction Hash</span>
+              <a
+                href={explorerUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-amber-400 hover:text-amber-300 font-mono font-medium text-[11px] hover:underline break-all inline-flex items-center gap-1 mt-0.5"
+                title="View Transaction on Stellar Expert Explorer"
+              >
+                <span>{fullHash}</span>
+                <ExternalLink className="w-3 h-3 shrink-0 inline" />
+              </a>
             </div>
           </div>
 

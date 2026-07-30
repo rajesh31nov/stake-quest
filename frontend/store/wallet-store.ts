@@ -74,6 +74,7 @@ export const useWalletStore = create<WalletState & WalletStoreAction>((set, get)
       walletId,
       isConnected: true,
     });
+    get().refreshBalance();
   },
 
   refreshBalance: async () => {

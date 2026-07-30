@@ -85,7 +85,23 @@ npm run dev
 
 ---
 
-## Deployed Smart Contracts
+## 🚀 Screenshot of the dApp
+### Landing Page
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/1a95c993-2d1b-4d98-bbb3-7c079721680d" />
+
+### Dashboard
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/e11d3548-b7d8-45a2-ae53-b69bdc0a9dc3" />
+
+### Create Challenge Form
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/b1817268-a321-4c6a-8990-393d94cf2d59" />
+
+### My Challenges
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/353a413b-9461-43ee-8e0a-d50b48f3d76c" />
+
+
+---
+
+## ⚡ Deployed Smart Contracts
 
 ### 1st Deployed Contract (Challenge Contract)
 - Network : Stellar Testnet
@@ -99,6 +115,8 @@ npm run dev
 - Contract Explorar : https://stellar.expert/explorer/testnet/contract/CDCK7GNCJ6BFLKOH72PFR7G4VKEZ5MO5UL46P52QSEQPZ4WUZOS46ZOQ
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/3b47d999-c15d-4594-8de8-9ee6c6a5dfe7" />
 
+
+---
 
 ## 📄 License
 

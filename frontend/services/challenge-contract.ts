@@ -1,18 +1,55 @@
 import {
-  Contract,
   Address,
   Account,
-  nativeToScVal,
+  Operation,
   scValToNative,
   TransactionBuilder,
   BASE_FEE,
   rpc,
+  xdr,
 } from "@stellar/stellar-sdk";
 import { STELLAR_CONFIG } from "@/utils/stellar-constants";
 import { stellarRpcService } from "./stellar-rpc";
 import { walletKitService } from "./wallet-kit";
 import { ChallengeModel, ChallengeStatus, CreateChallengeInput } from "@/types/challenge";
 import { xlmToStroops, stroopsToXlm } from "@/utils/formatters";
+
+/**
+ * Convert BigInt to Soroban i128 ScVal XDR
+ */
+export function bigIntToI128ScVal(value: bigint): xdr.ScVal {
+  const big = BigInt(value);
+  const low = BigInt.asUintN(64, big);
+  const high = BigInt.asIntN(64, big >> 64n);
+
+  return xdr.ScVal.scvI128(
+    new xdr.Int128Parts({
+      hi: xdr.Int64.fromString(high.toString()),
+      lo: xdr.Uint64.fromString(low.toString()),
+    })
+  );
+}
+
+/**
+ * Convert BigInt/number to Soroban u64 ScVal XDR
+ */
+export function bigIntToU64ScVal(value: bigint | number): xdr.ScVal {
+  return xdr.ScVal.scvU64(xdr.Uint64.fromString(BigInt(value).toString()));
+}
+
+/**
+ * Convert string to Soroban String ScVal XDR
+ */
+export function stringToScVal(str: string): xdr.ScVal {
+  return xdr.ScVal.scvString(str);
+}
+
+/**
+ * Convert boolean to Soroban Bool ScVal XDR
+ */
+export function boolToScVal(b: boolean): xdr.ScVal {
+  return xdr.ScVal.scvBool(b);
+}
 
 export class ChallengeContractService {
   private contractId: string;
@@ -28,17 +65,27 @@ export class ChallengeContractService {
   private async executeTx(
     publicKey: string,
     operationName: string,
-    callArgs: any[]
+    callArgs: xdr.ScVal[]
   ): Promise<string> {
     const rpcServer = stellarRpcService.getServer();
     const account = await stellarRpcService.loadAccount(publicKey);
-    const contract = new Contract(this.contractId);
+
+    const invokeOp = Operation.invokeHostFunction({
+      func: xdr.HostFunction.hostFunctionTypeInvokeContract(
+        new xdr.InvokeContractArgs({
+          contractAddress: Address.fromString(this.contractId).toScAddress(),
+          functionName: operationName,
+          args: callArgs,
+        })
+      ),
+      auth: [],
+    });
 
     const tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
       networkPassphrase: STELLAR_CONFIG.TESTNET.networkPassphrase,
     })
-      .addOperation(contract.call(operationName, ...callArgs))
+      .addOperation(invokeOp)
       .setTimeout(30)
       .build();
 
@@ -78,40 +125,42 @@ export class ChallengeContractService {
     const amountStroops = xlmToStroops(input.amountXlm);
     const durationSeconds = BigInt(input.durationDays * 86400);
 
-    const callArgs = [
+    const callArgs: xdr.ScVal[] = [
       new Address(challengerPublicKey).toScVal(),
       new Address(input.participantAddress).toScVal(),
-      nativeToScVal(amountStroops, { type: "i128" }),
-      nativeToScVal(durationSeconds, { type: "u64" }),
-      nativeToScVal(input.title, { type: "string" }),
-      nativeToScVal(input.description, { type: "string" }),
-      nativeToScVal(input.requirements, { type: "string" }),
+      bigIntToI128ScVal(amountStroops),
+      bigIntToU64ScVal(durationSeconds),
+      stringToScVal(input.title),
+      stringToScVal(input.description),
+      stringToScVal(input.requirements),
     ];
 
     const txHash = await this.executeTx(challengerPublicKey, "create_challenge", callArgs);
-    return { challengeId: 1, txHash };
+    const challengeId = await this.getChallengeCount();
+
+    return { challengeId: challengeId > 0 ? challengeId : 1, txHash };
   }
 
   public async acceptChallenge(participantPublicKey: string, challengeId: number): Promise<string> {
-    const callArgs = [
+    const callArgs: xdr.ScVal[] = [
       new Address(participantPublicKey).toScVal(),
-      nativeToScVal(BigInt(challengeId), { type: "u64" }),
+      bigIntToU64ScVal(BigInt(challengeId)),
     ];
     return await this.executeTx(participantPublicKey, "accept_challenge", callArgs);
   }
 
   public async rejectChallenge(participantPublicKey: string, challengeId: number): Promise<string> {
-    const callArgs = [
+    const callArgs: xdr.ScVal[] = [
       new Address(participantPublicKey).toScVal(),
-      nativeToScVal(BigInt(challengeId), { type: "u64" }),
+      bigIntToU64ScVal(BigInt(challengeId)),
     ];
     return await this.executeTx(participantPublicKey, "reject_challenge", callArgs);
   }
 
   public async cancelChallenge(challengerPublicKey: string, challengeId: number): Promise<string> {
-    const callArgs = [
+    const callArgs: xdr.ScVal[] = [
       new Address(challengerPublicKey).toScVal(),
-      nativeToScVal(BigInt(challengeId), { type: "u64" }),
+      bigIntToU64ScVal(BigInt(challengeId)),
     ];
     return await this.executeTx(challengerPublicKey, "cancel_challenge", callArgs);
   }
@@ -122,11 +171,11 @@ export class ChallengeContractService {
     proofUrl: string,
     notes: string
   ): Promise<string> {
-    const callArgs = [
+    const callArgs: xdr.ScVal[] = [
       new Address(participantPublicKey).toScVal(),
-      nativeToScVal(BigInt(challengeId), { type: "u64" }),
-      nativeToScVal(proofUrl, { type: "string" }),
-      nativeToScVal(notes, { type: "string" }),
+      bigIntToU64ScVal(BigInt(challengeId)),
+      stringToScVal(proofUrl),
+      stringToScVal(notes),
     ];
     return await this.executeTx(participantPublicKey, "submit_proof", callArgs);
   }
@@ -136,18 +185,18 @@ export class ChallengeContractService {
     challengeId: number,
     approve: boolean
   ): Promise<string> {
-    const callArgs = [
+    const callArgs: xdr.ScVal[] = [
       new Address(challengerPublicKey).toScVal(),
-      nativeToScVal(BigInt(challengeId), { type: "u64" }),
-      nativeToScVal(approve, { type: "bool" }),
+      bigIntToU64ScVal(BigInt(challengeId)),
+      boolToScVal(approve),
     ];
     return await this.executeTx(challengerPublicKey, "resolve_challenge", callArgs);
   }
 
   public async claimExpiredRefund(callerPublicKey: string, challengeId: number): Promise<string> {
-    const callArgs = [
+    const callArgs: xdr.ScVal[] = [
       new Address(callerPublicKey).toScVal(),
-      nativeToScVal(BigInt(challengeId), { type: "u64" }),
+      bigIntToU64ScVal(BigInt(challengeId)),
     ];
     return await this.executeTx(callerPublicKey, "claim_expired_refund", callArgs);
   }
@@ -156,7 +205,17 @@ export class ChallengeContractService {
     try {
       const rpcServer = stellarRpcService.getServer();
       const dummyAddr = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
-      const contract = new Contract(this.contractId);
+
+      const invokeOp = Operation.invokeHostFunction({
+        func: xdr.HostFunction.hostFunctionTypeInvokeContract(
+          new xdr.InvokeContractArgs({
+            contractAddress: Address.fromString(this.contractId).toScAddress(),
+            functionName: "get_challenge",
+            args: [bigIntToU64ScVal(BigInt(challengeId))],
+          })
+        ),
+        auth: [],
+      });
 
       const tx = new TransactionBuilder(
         new Account(dummyAddr, "0"),
@@ -165,7 +224,7 @@ export class ChallengeContractService {
           networkPassphrase: STELLAR_CONFIG.TESTNET.networkPassphrase,
         }
       )
-        .addOperation(contract.call("get_challenge", nativeToScVal(BigInt(challengeId), { type: "u64" })))
+        .addOperation(invokeOp)
         .setTimeout(30)
         .build();
 
@@ -204,7 +263,17 @@ export class ChallengeContractService {
     try {
       const rpcServer = stellarRpcService.getServer();
       const dummyAddr = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
-      const contract = new Contract(this.contractId);
+
+      const invokeOp = Operation.invokeHostFunction({
+        func: xdr.HostFunction.hostFunctionTypeInvokeContract(
+          new xdr.InvokeContractArgs({
+            contractAddress: Address.fromString(this.contractId).toScAddress(),
+            functionName: "get_challenge_count",
+            args: [],
+          })
+        ),
+        auth: [],
+      });
 
       const tx = new TransactionBuilder(
         new Account(dummyAddr, "0"),
@@ -213,7 +282,7 @@ export class ChallengeContractService {
           networkPassphrase: STELLAR_CONFIG.TESTNET.networkPassphrase,
         }
       )
-        .addOperation(contract.call("get_challenge_count"))
+        .addOperation(invokeOp)
         .setTimeout(30)
         .build();
 

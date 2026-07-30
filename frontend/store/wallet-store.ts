@@ -9,6 +9,7 @@ interface WalletStoreAction {
   setAddress: (address: string, walletId: string) => void;
   refreshBalance: () => Promise<void>;
   setNetwork: (network: NetworkType) => void;
+  initAutoConnect: () => Promise<void>;
 }
 
 export const useWalletStore = create<WalletState & WalletStoreAction>((set, get) => ({
@@ -33,9 +34,9 @@ export const useWalletStore = create<WalletState & WalletStoreAction>((set, get)
           walletId,
           isConnected: true,
           isConnecting: false,
+          error: null,
         });
 
-        // Persist to localStorage
         if (typeof window !== "undefined") {
           localStorage.setItem("stakequest_connected_address", address);
           localStorage.setItem("stakequest_wallet_id", walletId);
@@ -46,7 +47,7 @@ export const useWalletStore = create<WalletState & WalletStoreAction>((set, get)
     } catch (err: any) {
       set({
         isConnecting: false,
-        error: err.message || "Failed to connect wallet.",
+        error: err.message || "Failed to connect Freighter wallet.",
       });
     }
   },
@@ -88,5 +89,21 @@ export const useWalletStore = create<WalletState & WalletStoreAction>((set, get)
 
   setNetwork: (network: NetworkType) => {
     set({ network });
+  },
+
+  initAutoConnect: async () => {
+    if (typeof window === "undefined") return;
+    const savedAddress = localStorage.getItem("stakequest_connected_address");
+    const savedWalletId = localStorage.getItem("stakequest_wallet_id") || "freighter";
+
+    if (savedAddress && savedAddress.startsWith("G")) {
+      set({
+        address: savedAddress,
+        publicKey: savedAddress,
+        walletId: savedWalletId,
+        isConnected: true,
+      });
+      await get().refreshBalance();
+    }
   },
 }));

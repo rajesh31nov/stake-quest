@@ -4,7 +4,7 @@ import { STELLAR_CONFIG } from "@/utils/stellar-constants";
 
 describe("Wallet Integration & Network Validation", () => {
   beforeEach(() => {
-    useWalletStore.setState({ address: null, isConnected: false, balance: "0" });
+    useWalletStore.setState({ address: null, isConnected: false, balanceXlm: "0" });
   });
 
   it("should initialize disconnected by default", () => {
@@ -15,17 +15,17 @@ describe("Wallet Integration & Network Validation", () => {
 
   it("should update address and connection status on setAddress", () => {
     const mockAddr = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
-    useWalletStore.getState().setAddress(mockAddr);
+    useWalletStore.getState().setAddress(mockAddr, "freighter");
     const state = useWalletStore.getState();
     expect(state.address).toBe(mockAddr);
     expect(state.isConnected).toBe(true);
   });
 
   it("should clear address on disconnect reset", () => {
-    useWalletStore.getState().setAddress("GABC");
+    useWalletStore.getState().setAddress("GABC", "freighter");
     expect(useWalletStore.getState().isConnected).toBe(true);
 
-    useWalletStore.setState({ address: null, isConnected: false });
+    useWalletStore.getState().disconnectWallet();
 
     const state = useWalletStore.getState();
     expect(state.address).toBeNull();
@@ -33,7 +33,7 @@ describe("Wallet Integration & Network Validation", () => {
   });
 
   it("should validate testnet network configuration constants", () => {
-    expect(STELLAR_CONFIG.TESTNET.networkPassphrase).toBe("Test SDF Network ; July 2015");
+    expect(STELLAR_CONFIG.TESTNET.networkPassphrase).toBe("Test SDF Network ; September 2015");
     expect(STELLAR_CONFIG.TESTNET.rpcUrl).toContain("stellar.org");
   });
 });

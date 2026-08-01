@@ -85,6 +85,16 @@ npm run dev
 
 ---
 
+## 🚀 Demo Video Link of the StakeQuest (Drive Link)
+Drive Link: https://drive.google.com/drive/folders/1Xr7Ihb8hOcXHjFmzGQ3kmFnLwepOFYLO
+
+---
+
+## 🌐 Live URL of the StakeQuest 
+URL: https://stake-quest.vercel.app/
+
+---
+
 ## 🚀 Screenshot of the dApp
 ### Landing Page
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/1a95c993-2d1b-4d98-bbb3-7c079721680d" />
